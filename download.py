@@ -3,7 +3,8 @@ import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 import os
-import base64
+import urllib.request
+import html
 
 
 def main():
@@ -35,7 +36,7 @@ def download_assessments_for_ith_page(driver, output_directory, starting_page):
     while True:
         # driver.get(f"https://app.crowdmark.com/student/courses?page={page_num}")
         driver.get(f"https://app.crowdmark.com/student/course-archive?page={page_num}")
-        time.sleep(3)  # wait for page to load. For some reason driver.get doesn't wait for the entire page to load
+        time.sleep(2)  # wait for page to load. For some reason driver.get doesn't wait for the entire page to load
 
         course_list = driver.find_element(By.CLASS_NAME, "student-dashboard__course-list")
 
@@ -55,7 +56,7 @@ def download_assessments_for_ith_page(driver, output_directory, starting_page):
 def download_assessments_for_course(driver, output_directory, url):
     course_name = page_name(url)
     driver.get(url)
-    time.sleep(3)  # wait for page to load. For some reason driver.get doesn't wait for the entire page to load
+    time.sleep(2)  # wait for page to load. For some reason driver.get doesn't wait for the entire page to load
 
     course_output_directory = os.path.join(output_directory, course_name)
     if not os.path.exists(course_output_directory):
@@ -72,39 +73,42 @@ def download_assessments_for_course(driver, output_directory, url):
 
 def download_assessment(driver, course_output_directory, url):
     driver.get(url)
-    time.sleep(5)  # wait for page to load. For some reason driver.get doesn't wait for the entire page to load
+    time.sleep(2)  # wait for page to load. For some reason driver.get doesn't wait for the entire page to load
     assessment_name = page_name(url)
-    html = driver.page_source
 
     assessment_output_directory = os.path.join(course_output_directory, assessment_name)
     if not os.path.exists(assessment_output_directory):
         os.makedirs(assessment_output_directory)
 
-    with open(f"{assessment_output_directory}/index.html", "w", encoding="utf-8") as file:
-        file.write(html)
+    external_local_file_name_map = {}
+
+    submissions = driver.find_elements(By.TAG_NAME, "img")
+    for i, submission in enumerate(submissions):
+        try:
+            submission_src = submission.get_attribute('src')
+            submission_file_name = f"{assessment_output_directory}/submission_{i}.png"
+            driver.execute_script(f"arguments[0].removeAttribute('crossorigin');", submission)
+            urllib.request.urlretrieve(submission_src, submission_file_name)
+            external_local_file_name_map[submission_src] = submission_file_name
+        except:
+            pass  # ignore alert
+
     buttons = driver.find_elements(By.CSS_SELECTOR, "ul button")
-    if len(buttons) == 0:
-        return
     for button in buttons:
         button.click()
-        time.sleep(1)
-        canvas_file_name = f"{assessment_output_directory}/{button.get_attribute('innerHTML')}.png"
-        # https://stackoverflow.com/questions/44485616/web-scraping-image-inside-canvas
-        # get the base64 representation of the canvas image (the part substring(21) is for removing the padding "data:image/png;base64")
-        # canvas = driver.find_elements(By.TAG_NAME, "canvas");
-        canvas = driver.find_elements(By.CSS_SELECTOR, ".score-distribution__chart");
-        if len(canvas) != 1:
-            print("wut")
-            print(canvas)
-            continue
-        canvas = canvas[0]
-        canvas_png = canvas.screenshot_as_png
-        # canvas_base64 = driver.execute_script("return arguments[0].toDataURL('image/png').substring(21);", canvas)
-        # canvas_png = base64.b64decode(canvas_base64)
-        with open(canvas_file_name, "wb") as graph:
-            graph.write(canvas_png)
+        time.sleep(0.25)
+        graph_file_name = f"{assessment_output_directory}/{button.get_attribute('innerHTML')}.png"
+        graph = driver.find_elements(By.CSS_SELECTOR, ".score-distribution__chart");
+        graph = graph[0]
+        graph_png = graph.screenshot_as_png
+        with open(graph_file_name, "wb") as graph_file:
+            graph_file.write(graph_png)
 
-
+    with open(f"{assessment_output_directory}/index.html", "w", encoding="utf-8") as file:
+        html_page_source = driver.page_source
+        for original_file_name in external_local_file_name_map:
+            html_page_source = html_page_source.replace(html.escape(original_file_name), external_local_file_name_map[original_file_name])
+        file.write(html_page_source)
 
 
 def page_name(url):
