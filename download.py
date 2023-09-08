@@ -82,14 +82,15 @@ def download_assessment(driver, course_output_directory, url):
 
     external_local_file_name_map = {}
 
-    submissions = driver.find_elements(By.TAG_NAME, "img")
-    for i, submission in enumerate(submissions):
+    images = driver.find_elements(By.TAG_NAME, "img")
+    for i, image in enumerate(images):
         try:
-            submission_src = submission.get_attribute('src')
-            submission_file_name = f"{assessment_output_directory}/submission_{i}.png"
-            driver.execute_script(f"arguments[0].removeAttribute('crossorigin');", submission)
-            urllib.request.urlretrieve(submission_src, submission_file_name)
-            external_local_file_name_map[submission_src] = submission_file_name
+            image_src = image.get_attribute('src')
+            image_file_name = f"image_{i}.png"
+            image_file_path = f"{assessment_output_directory}/{image_file_name}"
+            driver.execute_script(f"arguments[0].removeAttribute('crossorigin');", image)
+            urllib.request.urlretrieve(image_src, image_file_path)
+            external_local_file_name_map[image_src] = image_file_name
         except:
             pass  # ignore alert
 
